@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:location/location.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import './constants.dart';
 import 'package:http/http.dart' as http;
@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 List jsonData;
 
 //Longitude and latitude variables for use by the Location package
-var lon, lat;
+double lon, lat;
 
 //To handle all Network call errors
 //TODO: If true.. display a certain screen
@@ -18,8 +18,6 @@ bool hasError = false;
 
 //Parsed list of cities.. God, how will i sort this thing like this
 List<Country> cities;
-
-Location location = new Location();
 
 /************** */
 void main() => runApp(MyApp());
@@ -75,6 +73,26 @@ class MyHomePage extends StatefulWidget {
 bool isDefault = true;
 String clickedId = '2172797'; //dummy ID
 
+Future<void> getLocation() async {
+    Position position;
+    position = await Geolocator().getLastKnownPosition(desiredAccuracy: LocationAccuracy.medium);
+    if(position==null){
+      position = await Geolocator().getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+    }
+    try {
+      if(lon==null&&lat==null){
+      lon = position.longitude;
+      lat = position.latitude;
+      }else{
+        print(lon);
+        print(lat);
+      }
+    } catch (e) {
+      print('Line 110: $e');
+      hasError = true;
+    }
+  }
+
 class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
@@ -84,36 +102,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   ///Location() package for getting user Location
   ///
-  getLocation() async {
-    bool _serviceEnabled;
-    PermissionStatus _permissionGranted;
-    LocationData _locationData;
-
-    _serviceEnabled = await location.serviceEnabled();
-    if (!_serviceEnabled) {
-      _serviceEnabled = await location.requestService();
-      if (!_serviceEnabled) {
-        return;
-      }
-    }
-
-    _permissionGranted = await location.hasPermission();
-    if (_permissionGranted == PermissionStatus.DENIED) {
-      _permissionGranted = await location.requestPermission();
-      if (_permissionGranted != PermissionStatus.GRANTED) {
-        return;
-      }
-    }
-    try {
-      _locationData = await location.getLocation();
-      lon = _locationData.longitude;
-      lat = _locationData.latitude;
-    } catch (e) {
-      print('Line 110: $e');
-      hasError = true;
-    }
-  }
-
   ///List of cities to be populated later on screen
 
   @override
@@ -204,14 +192,7 @@ class _UserCurrentLocationState extends State<UserCurrentLocation> {
   Future<Weather> performAPICall() async {
     String url;
     if (isDefault) {
-      try {
-        final _locationData = await location.getLocation();
-        lon = _locationData.longitude;
-        lat = _locationData.latitude;
-      } catch (e) {
-        print('Line 122: $e');
-        hasError = true;
-      }
+      await getLocation();
       url = '$BASE_URL?lat=$lat&lon=$lon&APPID=$APIKEY';
     } else {
       url = '$BASE_URL?id=$clickedId&APPID=$APIKEY';
@@ -255,7 +236,7 @@ class _UserCurrentLocationState extends State<UserCurrentLocation> {
                         offset: Offset(-2, -2),
                         color: Colors.white)
                   ]),
-              child: snapshot.hasError
+              child: snapshot.hasError||hasError
                   ? Text('There was an error getting your current location')
                   : snapshot.connectionState == ConnectionState.waiting
                       ? Center(child: CircularProgressIndicator())
